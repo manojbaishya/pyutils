@@ -1,0 +1,92 @@
+#!/usr/bin/env python
+"""
+C Project Generator
+===================
+
+.. usage:: 
+    $ makecproject --name <PROJECT_NAME>
+
+This script will generate a directory tree under <PROJECT_NAME> and a Makefile, and initialise it as a git repository.
+<PROJECT_NAME>
+├── bin
+├── include
+├── lib
+├── src
+│   └── main.c
+├── tests
+└── Makefile
+
+To generate a license, see `github.com/nishanths/license <https://github.com/nishanths/license/>`_.
+"""
+import os
+import os.path
+import argparse
+import subprocess
+
+parser = argparse.ArgumentParser(description="Create a C Project and initialize git repository.")
+parser.add_argument("-n", "--name", type=str, required=True, help="Specify the name of the C project to be created in the current directory.")
+args = parser.parse_args()
+
+project_name = args.name
+cwd = os.getcwd()
+structure = ["bin", "src", "lib", "include", "tests"]
+canonical_makefile = f"""SHELL := /bin/bash
+
+CC        := gcc
+CFLAGS    := -std=gnu17 -Wall -Wextra -g
+
+BIN     := bin
+SRC     := src tests
+INCLUDE := include
+LIB     := lib
+
+LIBRARIES   := -lm
+
+EXECUTABLE  := {project_name}
+
+SOURCEDIRS  := $(shell find $(SRC) -maxdepth 0 -type d)
+INCLUDEDIRS := $(shell find $(INCLUDE) -maxdepth 0 -type d)
+LIBDIRS      := $(shell find $(LIB) -maxdepth 0 -type d)
+
+CINCLUDES   := $(patsubst %,-I %, $(INCLUDEDIRS:%/=%))
+CLIBS   := $(patsubst %,-L %, $(LIBDIRS:%/=%))
+SOURCES     := $(wildcard $(patsubst %, %/*.c, $(SOURCEDIRS)))
+
+
+all: $(BIN)/$(EXECUTABLE)
+
+$(BIN)/$(EXECUTABLE): $(SOURCES)
+	$(CC) $(CFLAGS) $(CINCLUDES) $(CLIBS) $^ -o $@ $(LIBRARIES)
+
+run: all
+	./$(BIN)/$(EXECUTABLE)
+
+debug:
+	gdb ./$(BIN)/$(EXECUTABLE)
+
+.PHONY: clean
+
+clean:
+	-$(RM) $(BIN)/$(EXECUTABLE)
+"""
+
+mainfunction = f"""#include <stdio.h>
+
+int main(int argc, const char *argv[]) {{
+    printf("Hello World from {project_name}!\\n");
+    return 0;
+}}
+"""
+
+project_path = os.path.join(cwd, project_name)
+project_subdirs = [os.path.join(project_path, subdir) for subdir in structure]
+os.mkdir(project_path)
+for each_subdir in project_subdirs:
+    os.mkdir(each_subdir)
+with open(os.path.join(project_path, "Makefile"), "w") as makefile:
+    makefile.write(canonical_makefile)
+with open(os.path.join(project_path, "src", "main.c"), "w") as mainfile:
+    mainfile.write(mainfunction)
+subprocess.run(["git", "init", project_path])
+
+print(f"Project directory created in {project_path}!")
